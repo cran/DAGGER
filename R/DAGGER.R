@@ -318,9 +318,9 @@ if (Linearize==TRUE) {
 
 #####################################
 LinearizeMap<-function(G) {
-A <- numeric(0)
-b <- numeric(0)
 N <- G$Nvert
+A <- Matrix(nrow=0,ncol=N,sparse=TRUE)
+b <- numeric(0)
 NormWeights <- numeric(0)
 for (i in 1:N) {
   v <- rep(0,N)
@@ -332,13 +332,14 @@ for (i in 1:N) {
     NormWeights <- c(NormWeights,length(G$Markers[[i]])*length(G$Markers[[Edges[j]]]))
     w <- v
     w[Edges[j]] <- 1
-    A <- rbind(A,w)
+    A <- rBind(A,w)
     b <- c(b,G$Weights[[i]][j])
   }
   }
 }
 M = length(b)
-LHS <- rbind(cbind(A,0*diag(M)),cbind(A,diag(M)),cbind(-A,diag(M)))
+DM <- Diagonal(M)
+LHS <- rBind(cBind(A,0*DM),cBind(A,DM),cBind(-A,DM))
 RHS <- c(rep(0,M),b,-b)
 f <- c(rep(0,N),NormWeights)
 dir <- rep(">=",3*M)
