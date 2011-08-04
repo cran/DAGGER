@@ -9,17 +9,23 @@ Integrates the information from multiple linkage maps to create a consensus dire
 linearized to produce a consensus map.
 }
 \usage{
-DAGGER(Maps,Linearize=TRUE,MapFilename=NULL,
-       GraphFilename=NULL,GraphDistances=FALSE)
+DAGGER(Maps,Linearize=TRUE,method="QP",rescale=TRUE,
+       MapFilename=NULL,GraphFilename=NULL,GraphDistances=FALSE)
 }
 
 \arguments{
 \item{Maps}{
 List of linkage maps.  Each linkage map is a data frame with two columns: the first column contains
-the marker names (as character objects), the second column contains the map positions.
+the marker names, the second column contains the map positions.
 }
 \item{Linearize}{
 If TRUE (default), DAGGER will linearize the consensus graph provided it is acyclic.
+}
+\item{method}{
+Specifies the linearization method: either "QP" (default) for quadratic programming or "LP" for linear programming.
+}
+\item{rescale}{
+If TRUE (default), the consensus map is rescaled to equal the mean length of the linkage maps.
 }
 \item{MapFilename}{
 Specifies the name of the output file for the consensus map.
@@ -58,22 +64,20 @@ the linkage maps had ordering conflicts.
 If Linearize == FALSE, DAGGER returns a logical value indicating whether the consensus graph was acyclic.
 }
 \references{
-Yap et al. 2003. A graph-theoretic approach to comparing and integrating genetic, physical and 
-sequence-based maps. Genetics 165:2235-22247.
-
-Close et al. 2009. Development and implementation of high-throughput SNP genotyping in barley. 
-BMC Genomics 10:582. \url{http://www.biomedcentral.com/1471-2164/10/582}
-
-Endelman, J.B. (submitted) New algorithm improves fine structure of the barley consensus SNP map.
+Endelman, J.B. (in press) New algorithm improves fine structure of the barley consensus SNP map. BMC Genomics.
 }
 
 
 \examples{
 
-data(Barley5H)
-
-ConsensusMap <- DAGGER(Barley5H)
-
+#generate two pseudo-linkage maps, each with 500 markers out of 1000 possible
+m1 <- c(0,sort(sort(runif(1000),index.return=TRUE)$ix[1:500]))
+m2 <- c(0,sort(sort(runif(1000),index.return=TRUE)$ix[1:500]))
+Maps <- list()
+Maps[[1]] <- data.frame(marker=m1,map=m1)
+Maps[[2]] <- data.frame(marker=m2,map=m2)
+ConsensusMap.LP <- DAGGER(Maps,method="LP")
+ConsensusMap.QP <- DAGGER(Maps,method="QP")
 }
 
 

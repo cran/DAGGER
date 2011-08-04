@@ -1,5 +1,5 @@
 DAGGER <-
-function(Maps, Linearize = TRUE, MapFilename = NULL, GraphFilename = NULL, GraphDistances = FALSE) {
+function(Maps, Linearize = TRUE, method = "QP", rescale = TRUE, MapFilename = NULL, GraphFilename = NULL, GraphDistances = FALSE) {
 
 #############################################################
 Merge <- function(M,G = NULL) {
@@ -13,11 +13,12 @@ print("Linkage map must have at least two markers.")
 } else if (is.null(G)) {
 # no G was passed
 #convert M to diG 
-G <- list(Markers = list(), ReverseEdges = list(), ForwardEdges = list(), Weights = list(), MarkerNames = M[,1], Vertices = rep(0,dim(M)[1]), Nvert = 1, Nmark = dim(M)[1])
+G <- list(Markers = list(), ZeroEdges = list(), ReverseEdges = list(), ForwardEdges = list(), Weights = list(), MarkerNames = M[,1], Vertices = rep(0,dim(M)[1]), Nvert = 1, Nmark = dim(M)[1])
 G$Markers[[1]] <- 1
 G$Vertices[1] <- 1
 G$ReverseEdges[[1]] <- integer(0)
 G$ForwardEdges[[1]] <- integer(0)
+G$ZeroEdges[[1]] <- integer(0)
 G$Weights[[1]] <- numeric(0)
 
 for (i in 2:G$Nmark) {
@@ -34,6 +35,7 @@ for (i in 2:G$Nmark) {
     G$Markers[[G$Nvert]] <- i
     G$Vertices[i] <- G$Nvert
     G$ForwardEdges[[G$Nvert]] <- integer(0) #initialize to NULL
+    G$ZeroEdges[[G$Nvert]] <- integer(0)
     G$Weights[[G$Nvert]] <- numeric(0)
     G$ReverseEdges[[G$Nvert]] <- G$Nvert-1
     } #end else
@@ -57,11 +59,12 @@ for (i in 1:length(MarkerCoding)) {
 } #end for
 
 #construct G2 from M
-G2 <- list(Markers = list(), ReverseEdges = list(), ForwardEdges = list(), Weights = list(), Nvert = 1, Nmark = length(MarkerCoding))
+G2 <- list(Markers = list(), ZeroEdges = list(), ReverseEdges = list(), ForwardEdges = list(), Weights = list(), Nvert = 1, Nmark = length(MarkerCoding))
 G2$Markers[[1]] <- MarkerCoding[1]
 G2$Vertices[1] <- 1
 G2$ReverseEdges[[1]] <- integer(0)
 G2$ForwardEdges[[1]] <- integer(0)
+G2$ZeroEdges[[1]] <- integer(0)
 G2$Weights[[1]] <- numeric(0)
 
 for (i in 2:G2$Nmark) {
@@ -77,6 +80,7 @@ for (i in 2:G2$Nmark) {
     G2$Markers[[G2$Nvert]] <- MarkerCoding[i]
     G2$ReverseEdges[[G2$Nvert]] <- G2$Nvert-1
     G2$ForwardEdges[[G2$Nvert]] <- integer(0) #initialize to NULL
+    G2$ZeroEdges[[G2$Nvert]] <- integer(0)
     G2$Weights[[G2$Nvert]] <- numeric(0)
     } #end else
   } #end for
@@ -110,6 +114,7 @@ for (j in Vlist) {
   G$ForwardEdges[[NumEquiv]] <- G$ForwardEdges[[j]]
   G$Weights[[NumEquiv]] <- G$Weights[[j]]
   G$ReverseEdges[[NumEquiv]] <- G$ReverseEdges[[j]]
+  G$ZeroEdges[[NumEquiv]] <- c(G$ZeroEdges[[j]],j)
   for (k in G$ReverseEdges[[j]]) {
      u <- which(G$ForwardEdges[[k]]==j)
      G$ForwardEdges[[k]] <- c(G$ForwardEdges[[k]],rep(NumEquiv,length(u)))
@@ -132,9 +137,19 @@ if (length(Q) > 0) {
   for (k in Q) {G$Vertices[k] <- NumEquiv}
   G$ForwardEdges[[NumEquiv]] <- integer(0)  #this initializes to NULL
   G$ReverseEdges[[NumEquiv]] <- integer(0)
+  G$ZeroEdges[[NumEquiv]] <- integer(0)
   G$Weights[[NumEquiv]] <- numeric(0)
   LinkFrom <- c(LinkFrom,NumEquiv)
 }    
+
+#LinkFrom is set of vertices which contain markers in W.  They need zero edges to each other.
+  n.LinkFrom <- length(LinkFrom)
+  if (n.LinkFrom > 1) {
+    for (j in 1:(n.LinkFrom-1)) {
+       G$ZeroEdges[[LinkFrom[j]]] <- c(G$ZeroEdges[[LinkFrom[j]]],LinkFrom[(j+1):n.LinkFrom])
+    }
+  }
+
 
 for (i in 2:G2$Nvert) {  
   W <- G2$Markers[[i]]
@@ -162,6 +177,7 @@ for (i in 2:G2$Nvert) {
     G$ForwardEdges[[NumEquiv]] <- G$ForwardEdges[[j]]
     G$Weights[[NumEquiv]] <- G$Weights[[j]]
     G$ReverseEdges[[NumEquiv]] <- G$ReverseEdges[[j]]
+    G$ZeroEdges[[NumEquiv]] <- c(G$ZeroEdges[[j]],j)
     for (k in G$ReverseEdges[[j]]) {
       u <- which(G$ForwardEdges[[k]]==j)
       G$ForwardEdges[[k]] <- c(G$ForwardEdges[[k]],rep(NumEquiv,length(u)))
@@ -184,6 +200,7 @@ for (i in 2:G2$Nvert) {
     for (k in Q) {G$Vertices[k] <- NumEquiv}
     G$ForwardEdges[[NumEquiv]] <- integer(0)  #this initializes to NULL
     G$ReverseEdges[[NumEquiv]] <- integer(0)
+    G$ZeroEdges[[NumEquiv]] <- integer(0)
     G$Weights[[NumEquiv]] <- numeric(0)
     LinkTo <- c(LinkTo,NumEquiv)
   }    
@@ -195,6 +212,14 @@ for (i in 2:G2$Nvert) {
   for (j in LinkTo) {
       G$ReverseEdges[[j]] <- c(G$ReverseEdges[[j]],LinkFrom)
   }  
+
+  #LinkTo is set of vertices which contain markers in W.  They need zero edges to each other.
+  n.LinkTo <- length(LinkTo)
+  if (n.LinkTo > 1) {
+    for (j in 1:(n.LinkTo-1)) {
+       G$ZeroEdges[[LinkTo[j]]] <- c(G$ZeroEdges[[LinkTo[j]]],LinkTo[(j+1):n.LinkTo])
+    }
+  }
 
   LinkFrom <- LinkTo
 } #end for i
@@ -208,13 +233,16 @@ G  #return DAG
 ##############################################################
 
 NumMaps <- length(Maps)
+linkage.map.lengths <- rep(0,NumMaps)
 
 if (NumMaps < 2) {
 print("Must have at least two maps.")
 } else {
    G <- Merge(Maps[[1]])
+   linkage.map.lengths[1] <- Maps[[1]][nrow(Maps[[1]]),2]
    for (i in 2:NumMaps) {
       G <- Merge(Maps[[i]],G)
+      linkage.map.lengths[i] <- Maps[[i]][nrow(Maps[[i]]),2]
    }
 
 #Check for inconsistencies using SCC
@@ -317,11 +345,14 @@ if (Linearize==FALSE) {FALSE} else {NULL}  #if Linearize=TRUE, return NULL
 if (Linearize==TRUE) {
 
 #####################################
-LinearizeMap<-function(G) {
+LinearizeMap<-function(G,method="LP") {
 N <- G$Nvert
-A <- Matrix(nrow=0,ncol=N,sparse=TRUE)
-b <- numeric(0)
+A <- Matrix(nrow=0,ncol=N,sparse=TRUE)  #adjacency matrix for nonzero edges
+B <- Matrix(nrow=0,ncol=N,sparse=TRUE)  #adjacency matrix for zero edges
+d <- numeric(0)
 NormWeights <- numeric(0)
+ZeroWeights <- numeric(0)
+
 for (i in 1:N) {
   v <- rep(0,N)
   v[i] <- -1
@@ -333,29 +364,60 @@ for (i in 1:N) {
     w <- v
     w[Edges[j]] <- 1
     A <- rBind(A,w)
-    b <- c(b,G$Weights[[i]][j])
-  }
-  }
-}
-M = length(b)
-DM <- Diagonal(M)
-LHS <- rBind(cBind(A,0*DM),cBind(A,DM),cBind(-A,DM))
-RHS <- c(rep(0,M),b,-b)
-f <- c(rep(0,N),NormWeights)
-dir <- rep(">=",3*M)
-H <- Rglpk_solve_LP(f,LHS,dir,RHS)
+    d <- c(d,G$Weights[[i]][j])
+  } #end for j
+  } #end if Ne > 0
 
-if (H$status > 0) {
-print("Error in LPsolver.")
+  Zero.Edges <- G$ZeroEdges[[i]]
+  Nz <- length(Zero.Edges)
+  if (Nz > 0) {
+   for (j in 1:Nz) {
+     w <- v
+     w[Zero.Edges[j]] <- 1
+     B <- rBind(B,w)
+     ZeroWeights <- c(ZeroWeights,length(G$Markers[[i]])*length(G$Markers[[Zero.Edges[j]]]))
+   } #end for j
+   } #end if Nz
+
+} #end for i
+
+n.zero <- nrow(B)
+n.edge <- nrow(A)
+
+if (method=="LP") {
+ A.B <- rBind(A,B)
+ d.0 <- c(d,rep(0,n.zero))
+ LHS <- rBind(cBind(A,Matrix(0,nrow=n.edge,ncol=n.edge+n.zero,sparse=TRUE)),cBind(A.B,Diagonal(n.edge+n.zero)),cBind(-A.B,Diagonal(n.edge+n.zero)))
+ RHS <- c(rep(0,n.edge),d.0,-d.0)
+ f <- c(rep(0,N),NormWeights,ZeroWeights)
+ dir <- rep(">=",3*n.edge+2*n.zero)
+ H <- Rglpk_solve_LP(f,LHS,dir,RHS)
+
+ if (H$status > 0) {
+  print("Error in LPsolver.")
+  } else {
+  c.map <- H$solution[1:N]
+  c.map - min(c.map)  #map starts at zero
+ } #end if/else H
 } else {
-
-D <- H$solution[1:N]
-D - min(D)  #map starts at zero
-} #end if/else H
+# method QP
+ A <- rBind(c(1,rep(0,N-1)),A)
+ d <- c(0,d)
+ A.B <- rBind(A,B)
+ d.0 <- c(d,rep(0,n.zero))
+ Q <- Diagonal(n.edge+n.zero+1,c(1,NormWeights,ZeroWeights))
+ QP.ans <- solve.QP(t(A.B)%*%Q%*%A.B,t(A.B)%*%Q%*%d.0,t(A),meq=1)
+ c.map <- QP.ans$solution
+ c.map - min(c.map)
+} #end if method
 } #end function
 ###################################################3
 
-D <- LinearizeMap(G)  #map positions
+D <- LinearizeMap(G,method)  #map positions, guaranteed to be nonnegative
+
+if (rescale == TRUE) {
+  D <- D/max(D)*mean(linkage.map.lengths)
+}
 
 #sort distances in order of increasing map distance
 SortIdx = sort(D,index.return=TRUE)$ix 
@@ -467,11 +529,16 @@ if (!is.null(GraphFilename)) {
    for (j in G$ForwardEdges[[i]]) {
      count <- count + 1
      if (GraphDistances==TRUE) {
-     writeLines(paste(Bin2Bin[i],"->",Bin2Bin[j],"[label=",paste("\"",as.character(round(G$Weights[[i]][count],digits=2)),"\"",sep=""),"];"),con)
+      writeLines(paste(Bin2Bin[i],"->",Bin2Bin[j],"[label=",paste("\"",as.character(round(G$Weights[[i]][count],digits=2)),"\"",sep=""),"];"),con)
      } else {
-     writeLines(paste(Bin2Bin[i],"->",Bin2Bin[j],";"),con)
+      writeLines(paste(Bin2Bin[i],"->",Bin2Bin[j],";"),con)
      } #end if/else
    } #end for j
+  if (GraphDistances==TRUE) {
+   for (j in G$ZeroEdges[[i]]) {
+     writeLines(paste(Bin2Bin[i],"->",Bin2Bin[j],"[label=0,arrowhead=none];"),con)
+   } #end for j
+  } #end if GraphDistances
   } #end for i
   writeLines("}",con)
   close(con)
